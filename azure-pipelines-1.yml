@@ -1,34 +1,38 @@
-# ASP.NET
-# Build and test ASP.NET projects.
-# Add steps that publish symbols, save build artifacts, deploy, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/apps/aspnet/build-aspnet-4
-
-trigger:
-- release/9.28
+pr: none
+trigger: none
 
 pool:
   vmImage: 'windows-latest'
 
-variables:
-  solution: '**/*.sln'
-  buildPlatform: 'Any CPU'
-  buildConfiguration: 'Release'
-
 steps:
-- task: NuGetToolInstaller@1
+  - task: PowerShell@2
+    displayName: 'Pre-Build steps'
+    inputs:
+      targetType: filePath
+      filePath: ./Pipeline/PowershellScripts/Pre-Build.ps1
+      failOnStderr: true
 
-- task: NuGetCommand@2
-  inputs:
-    restoreSolution: '$(solution)'
+  - task: NuGetToolInstaller@1
+    displayName: 'Use NuGet 5.4.0'
+    
+  - task: NuGetCommand@2
+    displayName: 'NuGet restore'
+    inputs:
+      feedsToUse: config
+      nugetConfigPath: nuget.config
 
-- task: VSBuild@1
-  inputs:
-    solution: '$(solution)'
-    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactStagingDirectory)"'
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+  - task: VSBuild@1
+    displayName: 'Build solution **\*.sln'
+    inputs:
+      solution: '**\*.sln'
 
-- task: VSTest@2
-  inputs:
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+  - task: PowerShell@2
+    displayName: 'Copy CloudScaleUnitExtensionPackage package to artifact directory'
+    inputs:
+      targetType: filePath
+      filePath: ./Pipeline/PowershellScripts/CopyFileToDestination.ps1
+      arguments: '-RelativePath "$(Build.SourcesDirectory)\src\ScaleUnitSample" -File "CloudScaleUnitExtensionPackage.zip" -DestinationFullName "$(Build.ArtifactStagingDirectory)\ScaleUnitPackage_$(Build.BuildNumber).zip"'
+      failOnStderr: true
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: drop'
